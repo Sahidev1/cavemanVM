@@ -1,4 +1,4 @@
-##first iteration of idea: 
+## first iteration of idea: 
 
 A virtual memory tape, where each adress/index on the tape contains a byte.
 The computers also has access to a instruction tape where each instruction is 32-bits.
