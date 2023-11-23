@@ -1,3 +1,5 @@
+## work in progress
+
 ## first iteration of idea: 
 
 A virtual memory tape, where each adress/index on the tape contains a byte.
