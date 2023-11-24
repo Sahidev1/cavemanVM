@@ -91,58 +91,57 @@ int instruction_engine(word32 instr){
     word32 value;
     switch (opcode)
     {
-    case EXIT:
-        exit_status = 1;
-        break;
-    case LW:
-        char* byte_ptr = (char*) memory_tape;
-        byte_ptr += registers[reg2];
-        registers[reg1] = *((word32*)byte_ptr);
-        break;
-    case SW:
-        char* byte_pt = (char*) memory_tape;
-        byte_pt += registers[reg2];
-        word32* wptr = (word32*) byte_pt; 
-        *wptr = registers[reg1];
-        break;
-    case ADD:
-        registers[reg1] = registers[reg2] + registers[reg3];
-        break;
-    case SUB:
-        registers[reg1] = registers[reg2] - registers[reg3];
-        break;
-    case MUL:
-        registers[reg1] = registers[reg2]*registers[reg3];
-        break;
-    case DIV:
-        registers[reg1] = registers[reg2]/registers[reg3];
-        break;
-    case ADDI:
-        registers[reg1] = registers[reg2] + get_21bit_arg(instr);
-        break;
-    case AND:
-        registers[reg1] = registers[reg2]&registers[reg3];
-        break;
-    case NOT:
-        registers[reg1] = ~registers[reg1];
-        break;
-    case PRNT:
-        printf("%x\n", registers[reg1]);
-        break;
-    case J: 
-        registers[PC] = registers[reg1];
-        zero_zeroflag();
-        return 0;
-    case JZ:
-        if (zero_flag){
+        case EXIT:
+            exit_status = 1;
+            break;
+        case LW:
+            char* byte_ptr = (char*) memory_tape;
+            byte_ptr += registers[reg2];
+            registers[reg1] = *((word32*)byte_ptr);
+            break;
+        case SW:
+            char* byte_pt = (char*) memory_tape;
+            byte_pt += registers[reg2];
+            word32* wptr = (word32*) byte_pt; 
+            *wptr = registers[reg1];
+            break;
+        case ADD:
+            registers[reg1] = registers[reg2] + registers[reg3];
+            break;
+        case SUB:
+            registers[reg1] = registers[reg2] - registers[reg3];
+            break;
+        case MUL:
+            registers[reg1] = registers[reg2]*registers[reg3];
+            break;
+        case DIV:
+            registers[reg1] = registers[reg2]/registers[reg3];
+            break;
+        case ADDI:
+            registers[reg1] = registers[reg2] + get_21bit_arg(instr);
+            break;
+        case AND:
+            registers[reg1] = registers[reg2]&registers[reg3];
+            break;
+        case NOT:
+            registers[reg1] = ~registers[reg1];
+            break;
+        case PRNT:
+            printf("%x\n", registers[reg1]);
+            break;
+        case J: 
             registers[PC] = registers[reg1];
             zero_zeroflag();
             return 0;
-        }
-        break;
-    break;
-    default:
-        break;
+        case JZ:
+            if (zero_flag){
+                registers[PC] = registers[reg1];
+                zero_zeroflag();
+                return 0;
+            }
+            break;
+        default:
+            break;
     }
 
     if (opcode >= ADD && opcode <= NOT){
