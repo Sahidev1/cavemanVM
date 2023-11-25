@@ -1,34 +1,13 @@
 #include "vm.h"
 #include <stdio.h>
 
-word32 memory_tape[MEMORY_TAPE_SIZE / sizeof(word32)];
-word32 instr_tape[INSTRUCTION_TAPE_SIZE / sizeof(word32)];
+static decoded_instruction decoded_instr;
 
-word32 registers[NR_REGISTERS];
-int zero_flag;
-
-int PC_jump_to;
-
-static int exit_status = 0;
-
-void vm_dump(int dump_depth){
-    printf("vm dump at PC %x:\n", registers[PC]);
-    printf("memory dump:\n");
-    for(int i = 0; i < dump_depth; i++){
-        printf("|%x|", memory_tape[i]);
-    }
-    printf("\n");
-    printf("register dump:\n");
-    printf("MEMPTR: %x, PC: %x, GP0: %x, GP1: %x, GP2: %x, RET: %x\n\n",
-    registers[MEM_PTR], registers[PC], registers[GP0], registers[GP1],
-    registers[GP2], registers[RET]);
-}
-
-int load_instruction_tape(){
+static int load_instruction_tape(vm* vm, int run_mode){
     FILE *file = fopen("instruction_tape.bin", "rb");
 
-    size_t items_read = fread(instr_tape, sizeof(word32), INSTRUCTION_TAPE_SIZE / sizeof(word32), file);
-    if (items_read != INSTRUCTION_TAPE_SIZE / sizeof(word32)) {
+    size_t items_read = fread(vm->instr_tape, sizeof(word32), INSTRUCTION_TAPE_SIZE / sizeof(word32), file);
+    if (run_mode > RUN_MODE_NORMAL && items_read != INSTRUCTION_TAPE_SIZE / sizeof(word32)) {
         printf("Error reading instruction tape: expected %zu, read %zu elements.\n", 
                INSTRUCTION_TAPE_SIZE / sizeof(word32), items_read);
     }
@@ -37,137 +16,249 @@ int load_instruction_tape(){
     return items_read == INSTRUCTION_TAPE_SIZE / sizeof(word32) ? 0 : 1;
 }
 
-void set_zeroflag(){
-    zero_flag = 1;
+static void set_zeroflag(vm *vm){
+    vm->zero_flag = 1;
 }
 
-void zero_zeroflag(){
-    zero_flag = 0;
+static void zero_zeroflag(vm *vm){
+    vm->zero_flag = 0;
 }
 
-void checkresult_register(int reg){
-    if (registers[reg] == 0x0){
-        set_zeroflag();
+static void checkresult_register(vm *vm, int reg){
+    if (vm->registers[reg] == 0x0){
+        set_zeroflag(vm);
     }
     else {
-        zero_zeroflag();
+        zero_zeroflag(vm);
     }
 }
 
-int validate_PC (){
-    return registers[PC] >= 0 && registers[PC] <= INSTRUCTION_TAPE_SIZE/ sizeof(word32); 
+int validate_PC (vm *vm){
+    return vm->registers[PC] >= 0 && vm->registers[PC] <= INSTRUCTION_TAPE_SIZE/ sizeof(word32); 
 }
 
-int get_opcode(word32 instr){
-    return instr & (0x1f);
+static int get_opcode(word32 instr){
+    return instr & (0xf);
 }
 
-int get_reg1_arg(word32 instr){
-    return (instr>>5) & (0b111);
+static int get_reg1_arg(word32 instr){
+    return (instr>>4) & (0b1111);
 }
 
-int get_reg2_arg(word32 instr){
-    return (instr>>8) & (0b111);
+static int get_reg2_arg(word32 instr){
+    return (instr>>8) & (0b1111);
 }
 
-int get_reg3_arg(word32 instr){
-    return (instr>>11) & 0b111;
+static int get_reg3_arg(word32 instr){
+    return (instr>>12) & 0b1111;
 }
 
-word32 get_21bit_arg(word32 instr){
-    return instr>>11;
+static word32 get_16bit_arg(word32 instr){
+    return instr>>16;
 }
 
-int instruction_engine(word32 instr){
-    int opcode = get_opcode(instr);
-    int reg1 = get_reg1_arg(instr);
-    int reg2 = get_reg2_arg(instr);
-    int reg3 = get_reg3_arg(instr);
-    if (reg1 == ZERO){
-        exit_status = 1;
+static void decode_instruction(word32 tape_instruction,decoded_instruction* decode_struct){
+    decode_struct->opcode = get_opcode(tape_instruction);
+    decode_struct->reg1 = get_reg1_arg(tape_instruction);
+    decode_struct->reg2 = get_reg2_arg(tape_instruction);
+    decode_struct->reg3 = get_reg3_arg(tape_instruction);
+    decode_struct->arg = get_16bit_arg(tape_instruction);
+}
+
+static word32 tripple_instruction_exe(word32 value0, word32 value1, int opcode){
+    switch(opcode){
+        case ADD:
+            return value0 + value1;
+        case SUB:
+            return value0 - value1;
+        case MUL:
+            return value0 * value1;
+        case DIV:
+            return value0 / value1;
+        case NAND:
+            return ~(value0 & value1);
+        case SLT:
+            return value0 < value1 ? 1 : 0;
+    }
+}
+
+static int instruction_engine(vm *vm){
+    decoded_instruction* instr = &decoded_instr;
+    decode_instruction(vm->instr_tape[vm->registers[PC]],instr);
+    if (instr->opcode == EXIT){
+        vm->exit_status = 1;
+        return 0;
+    }
+    if (instr->reg1 == ZERO){
         printf("Error attempted to write to zero register\n");
         return 1;
     }
-    word32 value;
-    switch (opcode)
-    {
-        case EXIT:
-            exit_status = 1;
-            break;
+    switch(instr->opcode){
         case LW:
-            char* byte_ptr = (char*) memory_tape;
-            byte_ptr += registers[reg2];
-            registers[reg1] = *((word32*)byte_ptr);
+            char* byte_ptr = (char*) vm->memory_tape;
+            byte_ptr += vm->registers[instr->reg2];
+            vm->registers[instr->reg1] = *((word32*) byte_ptr);
+            zero_zeroflag(vm);
             break;
         case SW:
-            char* byte_pt = (char*) memory_tape;
-            byte_pt += registers[reg2];
-            word32* wptr = (word32*) byte_pt; 
-            *wptr = registers[reg1];
+            byte_ptr = (char*) vm->memory_tape;
+            byte_ptr += vm->registers[instr->reg2];
+            *((word32*) byte_ptr) = vm->registers[instr->reg1];
+            zero_zeroflag(vm);
             break;
-        case ADD:
-            registers[reg1] = registers[reg2] + registers[reg3];
+        case LWOPSW:
+            if(instr->arg >= ADD && instr->arg <= SLT && instr->arg != ADDI){
+                word32 mem_value1 = vm->memory_tape[vm->registers[instr->reg2]];
+                word32 mem_value2 = vm->memory_tape[vm->registers[instr->reg3]];
+                word32 result = tripple_instruction_exe(mem_value1,mem_value2,instr->arg);
+                vm->memory_tape[vm->registers[instr->reg1]] = result;
+                zero_zeroflag(vm);
+            } else {
+                printf("Error invalid instruction\n");
+                return 1;
+            }
             break;
-        case SUB:
-            registers[reg1] = registers[reg2] - registers[reg3];
-            break;
-        case MUL:
-            registers[reg1] = registers[reg2]*registers[reg3];
-            break;
-        case DIV:
-            registers[reg1] = registers[reg2]/registers[reg3];
+        case ADD: case SUB: case MUL: case DIV: case NAND: case SLT:
+            vm->registers[instr->reg1] = tripple_instruction_exe(vm->registers[instr->reg2],vm->registers[instr->reg3],instr->opcode);
+            checkresult_register(vm,instr->reg1);
             break;
         case ADDI:
-            registers[reg1] = registers[reg2] + get_21bit_arg(instr);
+            vm->registers[instr->reg1] = vm->registers[instr->reg2] + instr->arg;
+            checkresult_register(vm,instr->reg1);
             break;
-        case AND:
-            registers[reg1] = registers[reg2]&registers[reg3];
-            break;
-        case NOT:
-            registers[reg1] = ~registers[reg1];
-            break;
-        case PRNT:
-            printf("%x\n", registers[reg1]);
-            break;
-        case J: 
-            registers[PC] = registers[reg1];
-            zero_zeroflag();
-            return 0;
-        case JZ:
-            if (zero_flag){
-                registers[PC] = registers[reg1];
-                zero_zeroflag();
+        case BEQ:
+            if (vm->registers[instr->reg1] == vm->registers[instr->reg2]){
+                vm->registers[PC] = instr->arg;
+                zero_zeroflag(vm);
                 return 0;
             }
             break;
-        default:
+        case JZ:
+            if (vm->zero_flag){
+                vm->registers[PC] = vm->registers[instr->reg1];
+                zero_zeroflag(vm);
+                return 0;
+            }
             break;
-    }
-
-    if (opcode >= ADD && opcode <= NOT){
-        checkresult_register(reg1);
-    } else {
-        zero_zeroflag();
-    }
-    registers[PC]++;
-    return 0;
-}
-
-int main(){
-    registers[ZERO] = 0;
-    load_instruction_tape();
-
-
-    while(!exit_status){
-        if(!validate_PC()) {
-            printf("invalid PC %d\n", registers[PC]);
+        case PUTC:
+            char* cptr = (char*) &vm->registers[instr->reg1];
+            int offset = instr->reg2;
+            if (offset > 3){
+                printf("Error invalid offset\n");
+                return 1;
+            }
+            printf("%c",(char) *(cptr + offset));
+            zero_zeroflag(vm);
+            break;
+        case GETC:
+            char stdin_input;
+            scanf("%c",&stdin_input);
+            char* cptr2 = (char*) &vm->registers[instr->reg1];
+            unsigned int offset2 = instr->reg2;
+            if (offset2 > 3){
+                printf("Error invalid offset\n");
+                return 1;
+            }
+            *(cptr2 + offset2) = stdin_input;
+            zero_zeroflag(vm);
+            break;
+        case PRNT:
+            char* cptr3 = (char*) &vm->registers[instr->reg1];
+            cptr += instr->reg2;
+            if(instr->reg2 > 3){
+                printf("Error invalid offset\n");
+                return 1;
+            }
+            printf("%x\n",*((word32*) cptr3));
+            zero_zeroflag(vm);
+            break;
+        default:
+            printf("Error invalid instruction with opcode: %x \n", instr->opcode);
             return 1;
-        };
-        //printf("PC: %x\n", registers[PC]);
-        //vm_dump(10);
-        instruction_engine(instr_tape[registers[PC]]);
     }
-
-    printf("\nGraceful shutdown\n");
+    vm->registers[PC]++;
     return 0;
 }
+
+static int run_normal(vm *vm){
+    while (validate_PC(vm) && !vm->exit_status){
+        if (instruction_engine(vm)){
+            return 1;
+        }
+    }
+    return 0;
+}
+static int run_debug(vm *vm, int mem_debug_depth){
+    while(validate_PC(vm) && !vm->exit_status){
+        if (instruction_engine(vm)){
+            return 1;
+        }
+        printf("PC: %d\n",vm->registers[PC]);
+        printf("Zero flag: %d\n",vm->zero_flag);
+        printf("Exit status: %d\n",vm->exit_status);
+        printf("Registers:\n");
+        for (int i = 0; i < NR_REGISTERS; i++){
+            printf("[R%d]: %x, ",i,vm->registers[i]);
+        }
+        printf("\n");
+        printf("Memory tape:\n");
+        for (int i = 0; i < mem_debug_depth; i++){
+            printf("[M%d: %x]",i,vm->memory_tape[i]);
+        }
+        printf("\n");
+        printf("Instruction tape:\n");
+        for (int i = 0; i < mem_debug_depth; i++){
+            printf("[I%d]: %x, ",i,vm->instr_tape[i]);
+        }
+        printf("\n");
+    }
+    return 0;
+}
+
+static int run_step(vm *vm, int mem_debug_depth){
+    int step = 0;
+    while(validate_PC(vm) && !vm->exit_status){
+        if (instruction_engine(vm)){
+            return 1;
+        }
+        printf("PC: %d\n",vm->registers[PC]);
+        printf("Zero flag: %d\n",vm->zero_flag);
+        printf("Exit status: %d\n",vm->exit_status);
+        printf("Registers:\n");
+        for (int i = 0; i < NR_REGISTERS; i++){
+            printf("[R%d]: %x, ",i,vm->registers[i]);
+        }
+        printf("\n");
+        printf("Memory tape:\n");
+        for (int i = 0; i < mem_debug_depth; i++){
+            printf("[M%d: %x]",i,vm->memory_tape[i]);
+        }
+        printf("\n");
+        printf("Instruction tape:\n");
+        for (int i = 0; i < mem_debug_depth; i++){
+            printf("[I%d]: %x, ",i,vm->instr_tape[i]);
+        }
+        printf("\n");
+        printf("Step count: %d, type enter to continue\n",step);
+        getchar();
+    }
+    return 1;
+}
+
+int run_vm(vm *vm, int RUN_MODE){
+    load_instruction_tape(vm, RUN_MODE);
+    switch (RUN_MODE){
+        case RUN_MODE_NORMAL:
+            return run_normal(vm);
+        case RUN_MODE_DEBUG:
+            return run_debug(vm, 20);
+            return 1;
+        case RUN_MODE_STEP:
+            run_step(vm, 20);
+            return 1;
+        default:
+            printf("Error invalid run mode\n");
+            return 1;
+    }
+}
+
