@@ -1,5 +1,6 @@
 # CavemanVM Doc
-
+This hobbyproject is work in progress. 
+## Registers
 The VM features 16 32-bit registers, each serving specific roles or acting as general-purpose registers.
 Register List
 
@@ -86,8 +87,6 @@ assembly_code = [
     'EXIT' 
 ]
 ```
-
-## work in progress
 
 ## first iteration of idea: 
 
