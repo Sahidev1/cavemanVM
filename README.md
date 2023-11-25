@@ -20,25 +20,56 @@ Register List
 The VM operates with a variety of instructions, each identified by an opcode and having specific functionalities.
 Opcode Definitions. Use basic assembler to write code. 
 
-   * EXIT: Exits the program.
-   * LW: Load Word - LW $reg1 $reg2.
-   * SW: Store Word - SW $reg1 $reg2.
-   * LWOPSW: Load-Operate-Store Word - LWOPSW $reg1 $reg2 $reg3.
-   * ADD: Add - ADD $reg3 $reg1 $reg2.
-   * SUB: Subtract - SUB $reg3 $reg1 $reg2.
-   * MUL: Multiply - MUL $reg3 $reg1 $reg2.
-   * DIV: Divide - DIV $reg3 $reg1 $reg2.
-   * ADDI: Add Immediate - ADDI $reg3 $reg2 VALUE.
-   * NAND: Bitwise NAND - NAND $reg3 $reg1 $reg2.
-   * SLT: Set Less Than - SLT $reg3 $reg1 $reg2.
-   * BEQ: Branch if Equal - BEQ $reg1 $reg2 VALUE.
-   * JZ: Jump if Zero Flag Set - JZ $reg1.
-   * SHIFT: Shift - SHIFT $reg1 $reg2 DIRECTION.
-   * PUTC: Print Character - PUTC $reg3 OFFSET.
-   * GETC: Get Character - GETC $reg3 OFFSET.
+    EXIT: Exits the program.
+        Terminates the execution of the VM.
+
+    LW (Load Word): LW $reg1 $reg2
+        Loads a word (32-bit value) from the memory address specified in $reg2 into $reg1.
+
+    SW (Store Word): SW $reg1 $reg2
+        Stores the word in $reg1 into the memory address specified in $reg2.
+
+    LWOPSW (Load-Operate-Store Word): LWOPSW $reg1 $reg2 $reg3 OPCODE
+        Loads words from memory addresses in $reg2 and $reg3, performs an operation specified by OPCODE, and stores the result in the memory address specified in $reg1.Not Only few basic operations are supported like add, sub, mul, div, slt.
+
+    ADD: ADD $reg3 $reg1 $reg2
+        Adds the contents of $reg1 and $reg2 together, and stores the result in $reg3.
+
+    SUB (Subtract): SUB $reg3 $reg1 $reg2
+        Subtracts the content of $reg2 from $reg1 and stores the result in $reg3.
+
+    MUL (Multiply): MUL $reg3 $reg1 $reg2
+        Multiplies the contents of $reg1 and $reg2, and stores the result in $reg3.
+
+    DIV (Divide): DIV $reg3 $reg1 $reg2
+        Divides the content of $reg1 by $reg2 and stores the result in $reg3.
+
+    ADDI (Add Immediate): ADDI $reg3 $reg2 VALUE
+        Adds a constant value (VALUE) to the content of $reg2 and stores the result in $reg3.
+
+    NAND (Bitwise NAND): NAND $reg3 $reg1 $reg2
+        Performs a bitwise NAND operation on the contents of $reg1 and $reg2, and stores the result in $reg3.
+
+    SLT (Set Less Than): SLT $reg3 $reg1 $reg2
+        Compares the contents of $reg1 and $reg2. If $reg1 is less than $reg2, it sets $reg3 to 1, otherwise sets it to 0.
+
+    BEQ (Branch if Equal): BEQ $reg1 $reg2 VALUE
+        Compares the contents of $reg1 and $reg2. If they are equal, the program counter (PC) jumps to the address specified by VALUE.
+
+    JZ (Jump if Zero Flag Set): JZ $reg1
+        Checks the zero flag. If it is set, jumps to the address contained in $reg1.
+
+    SHIFT: SHIFT $reg1 $reg2 DIRECTION
+        Performs a bitwise shift on $reg1. The number of positions to shift is specified by $reg2. The DIRECTION determines if it's a left shift (0) or a right shift (non-zero).
+
+    PUTC (Print Character): PUTC $reg3 OFFSET
+        Prints a character to the standard output. The character is extracted from the register $reg3, based on the OFFSET (0 to 3), which specifies which byte to print.
+
+    GETC (Get Character): GETC $reg3 OFFSET
+        Reads a character from the standard input and stores it in the register $reg3. The OFFSET (0 to 3) specifies where to store the byte in the register.
 
 ## Hello world
-example of hello world:
+Example hello world program:
 ```
 assembly_code = [
     'ADDI $sp $z 0',
