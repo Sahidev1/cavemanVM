@@ -75,7 +75,7 @@ enum opcodes {
     BEQ, // BRANCH IF EQUAL $1 $2 VALUE , if $1 == $2 jump to VALUE
 
     JZ, //JUMP to address if zero flag is set: JZ $1
-    PRNT, // PRNT $1 offset, prints out the value in register $1 as 32bit hexadecimal 
+    SHIFT, // SHIFT $1 $2 DIRECTION, shift $1 by $2 bits in DIRECTION(0 = left, >0 = right)
     PUTC, // PUTC $3 offset , prints out first a byte from a register, offset(0 to 3) specifices which byte
     GETC, // GETC $3 offset, reads a byte from stdin and stores it in register $3, offset(0 to 3) specifices which byte
 };

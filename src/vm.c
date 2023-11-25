@@ -89,7 +89,7 @@ static int instruction_engine(vm *vm){
         vm->exit_status = 1;
         return 0;
     }
-    if (instr->reg1 == ZERO){
+    if (instr->reg1 == ZERO && instr->opcode != BEQ){
         printf("Error attempted to write to zero register\n");
         return 1;
     }
@@ -108,10 +108,13 @@ static int instruction_engine(vm *vm){
             break;
         case LWOPSW:
             if(instr->arg >= ADD && instr->arg <= SLT && instr->arg != ADDI){
-                word32 mem_value1 = vm->memory_tape[vm->registers[instr->reg2]];
-                word32 mem_value2 = vm->memory_tape[vm->registers[instr->reg3]];
-                word32 result = tripple_instruction_exe(mem_value1,mem_value2,instr->arg);
-                vm->memory_tape[vm->registers[instr->reg1]] = result;
+                char* base_ptr = (char*)&vm->memory_tape;
+                char* mem_byteptr0 = base_ptr + vm->registers[instr->reg2];
+                char* mem_byteptr1 = base_ptr + vm->registers[instr->reg3];
+                char* mem_byteptr2 = base_ptr + vm->registers[instr->reg1];
+                word32 result = tripple_instruction_exe(*((word32*)mem_byteptr0),*((word32*)mem_byteptr1),instr->arg);
+                word32* result_ptr = (word32*) mem_byteptr2;
+                *result_ptr = result;
                 zero_zeroflag(vm);
             } else {
                 printf("Error invalid instruction\n");
@@ -162,15 +165,20 @@ static int instruction_engine(vm *vm){
             *(cptr2 + offset2) = stdin_input;
             zero_zeroflag(vm);
             break;
-        case PRNT:
-            char* cptr3 = (char*) &vm->registers[instr->reg1];
-            cptr += instr->reg2;
-            if(instr->reg2 > 3){
-                printf("Error invalid offset\n");
+        case SHIFT:
+            int shift_by = vm->registers[instr->reg2];
+            int direction = instr->reg3;
+            if (shift_by < 0 || shift_by > 32){
+                printf("Error invalid shift amount\n");
                 return 1;
             }
-            printf("%x\n",*((word32*) cptr3));
-            zero_zeroflag(vm);
+            if (direction == 0){
+                vm->registers[instr->reg1] = vm->registers[instr->reg1] << shift_by;
+            }
+            else {
+                vm->registers[instr->reg1] = vm->registers[instr->reg1] >> shift_by;
+            }
+            checkresult_register(vm,instr->reg1);
             break;
         default:
             printf("Error invalid instruction with opcode: %x \n", instr->opcode);
@@ -239,7 +247,7 @@ static int run_step(vm *vm, int mem_debug_depth){
             printf("[I%d]: %x, ",i,vm->instr_tape[i]);
         }
         printf("\n");
-        printf("Step count: %d, type enter to continue\n",step);
+        printf("Step count: %d, type enter to continue\n",++step);
         getchar();
     }
     return 1;
